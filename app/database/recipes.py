@@ -49,7 +49,7 @@ async def get_recipe(recipe_id: str) -> dict | None:
     return _record_to_dict(row)
 
 
-async def list_recipes(limit: int = 20) -> list[dict]:
+async def list_recipes(limit: int = 50) -> list[dict]:
     pool = get_pool()
 
     async with pool.acquire() as conn:
@@ -60,6 +60,26 @@ async def list_recipes(limit: int = 20) -> list[dict]:
             ORDER BY created_at DESC
             LIMIT $1
             """,
+            limit,
+        )
+
+    return [dict(row) for row in rows]
+
+
+async def search_recipes(query: str, limit: int = 20) -> list[dict]:
+    pool = get_pool()
+    pattern = f"%{query}%"
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, title, recipe_text, region, occasion, created_at
+            FROM recipes
+            WHERE title ILIKE $1 OR recipe_text ILIKE $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            """,
+            pattern,
             limit,
         )
 
