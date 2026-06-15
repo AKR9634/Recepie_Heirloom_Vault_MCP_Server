@@ -1,0 +1,219 @@
+# PostgreSQL + pgvector on Docker (Command Reference)
+
+## Start PostgreSQL Container
+
+```powershell
+docker compose up -d
+```
+
+## Stop PostgreSQL Container
+
+```powershell
+docker compose down
+```
+
+## Stop PostgreSQL Container and Remove Volumes
+
+```powershell
+docker compose down -v
+```
+
+## Check Running Containers
+
+```powershell
+docker ps
+```
+
+Expected:
+
+```text
+recipe_heirloom_db
+0.0.0.0:5433->5432/tcp
+```
+
+---
+
+# Connect to PostgreSQL
+
+```powershell
+docker exec -it recipe_heirloom_db psql -U postgres -d recipe_heirloom
+```
+
+Expected:
+
+```text
+recipe_heirloom=#
+```
+
+---
+
+# Verify Database Exists
+
+```sql
+\l
+```
+
+OR
+
+```sql
+SELECT datname FROM pg_database;
+```
+
+Expected:
+
+```text
+postgres
+recipe_heirloom
+template0
+template1
+```
+
+---
+
+# Install pgvector Extension
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+---
+
+# Verify pgvector Installation
+
+```sql
+SELECT extname FROM pg_extension;
+```
+
+Expected:
+
+```text
+plpgsql
+vector
+```
+
+---
+
+# Show All Tables
+
+```sql
+\dt
+```
+
+Expected:
+
+```text
+recipes
+recipe_embeddings
+```
+
+---
+
+# Show Table Structure
+
+```sql
+\d recipes
+```
+
+```sql
+\d recipe_embeddings
+```
+
+---
+
+# Show Data
+
+```sql
+SELECT * FROM recipes LIMIT 10;
+```
+
+```sql
+SELECT * FROM recipe_embeddings LIMIT 10;
+```
+
+---
+
+# Count Records
+
+```sql
+SELECT COUNT(*) FROM recipes;
+```
+
+```sql
+SELECT COUNT(*) FROM recipe_embeddings;
+```
+
+---
+
+# Verify Database Connection from Python
+
+```powershell
+python -c "import asyncpg, asyncio; asyncio.run(asyncpg.connect('postgresql://postgres:postgres@localhost:5433/recipe_heirloom'))"
+```
+
+No output = successful connection.
+
+---
+
+# Check Port Usage
+
+```powershell
+netstat -ano | findstr :5432
+```
+
+---
+
+# Identify Process Using Port
+
+```powershell
+tasklist /FI "PID eq 7876"
+```
+
+```powershell
+tasklist /FI "PID eq 22472"
+```
+
+---
+
+# Docker Compose Configuration
+
+```yaml
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+
+    container_name: recipe_heirloom_db
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: recipe_heirloom
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+---
+
+# .env Configuration
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/recipe_heirloom
+MCP_SERVER_NAME=Recipe_Heirloom_Vault
+HUGGINGFACEHUB_API_TOKEN=<your_token>
+```
+
+---
+
+# Exit PostgreSQL
+
+```sql
+\q
+```

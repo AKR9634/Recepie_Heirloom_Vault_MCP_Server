@@ -9,8 +9,10 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/recipe_vault"
+    database_url: str = "postgresql://postgres:postgres@localhost:5433/recipe_vault"
     mcp_server_name: str = "Recipe Heirloom Vault"
+    huggingface_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    huggingfacehub_api_token: str = ""
 
 
 @lru_cache

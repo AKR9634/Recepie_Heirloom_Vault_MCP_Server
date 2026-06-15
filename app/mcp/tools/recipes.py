@@ -2,7 +2,9 @@ import uuid
 
 from fastmcp import FastMCP
 
+from app.database import embeddings as embedding_db
 from app.database import recipes as recipe_db
+from app.embeddings import generate_embedding
 
 
 def _validate_recipe_input(title: str, recipe_text: str) -> str | None:
@@ -33,6 +35,10 @@ def _serialize_recipe(recipe: dict) -> dict:
     }
 
 
+def _recipe_embedding_text(title: str, recipe_text: str) -> str:
+    return f"{title}\n\n{recipe_text}"
+
+
 def register_tools(mcp: FastMCP) -> None:
     @mcp.tool
     async def add_recipe(
@@ -56,9 +62,24 @@ def register_tools(mcp: FastMCP) -> None:
         except Exception as exc:
             return {"status": "error", "message": f"Failed to create recipe: {exc}"}
 
+        recipe_id = str(recipe["id"])
+        embedding_text = _recipe_embedding_text(recipe["title"], recipe["recipe_text"])
+
+        try:
+            embedding = await generate_embedding(embedding_text)
+            await embedding_db.store_embedding(recipe_id, embedding)
+        except Exception as exc:
+            return {
+                "status": "success",
+                "recipe_id": recipe_id,
+                "message": "Recipe created successfully",
+                "embedding_status": "failed",
+                "embedding_error": str(exc),
+            }
+
         return {
             "status": "success",
-            "recipe_id": str(recipe["id"]),
+            "recipe_id": recipe_id,
             "message": "Recipe created successfully",
         }
 
@@ -104,6 +125,28 @@ def register_tools(mcp: FastMCP) -> None:
 
         try:
             recipes = await recipe_db.search_recipes(query.strip())
+        except Exception as exc:
+            return {"status": "error", "message": f"Failed to search recipes: {exc}"}
+
+        return {
+            "status": "success",
+            "count": len(recipes),
+            "recipes": [_serialize_recipe(recipe) for recipe in recipes],
+        }
+
+    @mcp.tool
+    async def semantic_search_recipes(query: str) -> dict:
+        """Search recipes by meaning using embedding similarity."""
+        if not query or not query.strip():
+            return {"status": "error", "message": "Search query cannot be empty"}
+
+        try:
+            query_embedding = await generate_embedding(query.strip())
+        except Exception as exc:
+            return {"status": "error", "message": f"Failed to generate query embedding: {exc}"}
+
+        try:
+            recipes = await embedding_db.semantic_search_recipes(query_embedding)
         except Exception as exc:
             return {"status": "error", "message": f"Failed to search recipes: {exc}"}
 
