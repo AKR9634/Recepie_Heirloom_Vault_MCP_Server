@@ -8,8 +8,12 @@ CREATE TABLE IF NOT EXISTS recipes (
     recipe_text TEXT NOT NULL,
     region TEXT,
     occasion TEXT,
+    story TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- Idempotent migration for databases created before the story column existed.
+ALTER TABLE recipes ADD COLUMN IF NOT EXISTS story TEXT;
 
 CREATE TABLE IF NOT EXISTS recipe_embeddings (
     recipe_id UUID PRIMARY KEY REFERENCES recipes(id) ON DELETE CASCADE,

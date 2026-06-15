@@ -7,6 +7,7 @@ from fastmcp import FastMCP
 from openai import OpenAI
 
 from app.config.settings import get_settings
+from app.mcp.tools.recipes import create_recipe_with_embedding
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -204,36 +205,88 @@ def parse_model_response(response_text: str) -> dict:
     return parsed
 
 
+def analysis_to_recipe_text(analysis: dict) -> str:
+    recipe = analysis["estimated_recipe"]
+    ingredients = recipe["ingredients"]
+    instructions = recipe["instructions"]
+
+    lines = ["Ingredients:", ""]
+    for item in ingredients:
+        lines.append(f"* {item}")
+
+    lines.extend(["", "Instructions:", ""])
+    for index, step in enumerate(instructions, start=1):
+        step_text = str(step).strip()
+        if step_text and step_text[-1] not in ".!?":
+            step_text = f"{step_text}."
+        lines.append(f"{index}. {step_text}")
+
+    return "\n".join(lines)
+
+
+async def run_food_image_analysis(image_path: str) -> dict:
+    if not image_path or not image_path.strip():
+        return {"status": "error", "message": "Image path cannot be empty"}
+
+    try:
+        data_url = image_to_data_url(image_path.strip())
+    except FileNotFoundError:
+        return {"status": "error", "message": "Unable to analyze image: file not found"}
+    except (OSError, ValueError) as exc:
+        return {"status": "error", "message": f"Unable to analyze image: {exc}"}
+
+    try:
+        response_text = await call_food_analysis_model(data_url)
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+    except RuntimeError as exc:
+        print("\nRUNTIME ERROR:")
+        print(exc)
+        return {"status": "error", "message": str(exc)}
+
+    try:
+        analysis = parse_model_response(response_text)
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+
+    return {"status": "success", "analysis": analysis}
+
+
 def register_tools(mcp: FastMCP) -> None:
     @mcp.tool
     async def analyze_food_image(image_path: str) -> dict:
         """Identify a prepared dish from a food image and estimate how it is commonly made."""
-        if not image_path or not image_path.strip():
-            return {"status": "error", "message": "Image path cannot be empty"}
+        return await run_food_image_analysis(image_path)
 
-        try:
-            data_url = image_to_data_url(image_path.strip())
-        except FileNotFoundError:
-            return {"status": "error", "message": "Unable to analyze image: file not found"}
-        except (OSError, ValueError) as exc:
-            return {"status": "error", "message": f"Unable to analyze image: {exc}"}
+    @mcp.tool
+    async def save_analyzed_recipe(image_path: str) -> dict:
+        """Analyze a food image and save the estimated recipe to the heirloom vault."""
+        analysis_result = await run_food_image_analysis(image_path)
+        if analysis_result["status"] == "error":
+            return analysis_result
 
-        try:
-            response_text = await call_food_analysis_model(data_url)
-        except ValueError as exc:
-            return {"status": "error", "message": str(exc)}
-        except RuntimeError as exc:
-            print("\nRUNTIME ERROR:")
-            print(exc)
+        analysis = analysis_result["analysis"]
+        title = analysis["dish_name"].strip()
+        recipe_text = analysis_to_recipe_text(analysis)
+        cuisine = analysis.get("cuisine", "").strip()
+        metadata = analysis.get("metadata", {})
+        meal_type = metadata.get("meal_type", "").strip()
 
-            return {
-                "status": "error",
-                "message": str(exc)
-            }
+        create_result = await create_recipe_with_embedding(
+            title=title,
+            recipe_text=recipe_text,
+            region=cuisine or None,
+            occasion=meal_type or None,
+            fail_on_embedding_error=True,
+            success_message="Recipe successfully created from image",
+        )
 
-        try:
-            analysis = parse_model_response(response_text)
-        except ValueError as exc:
-            return {"status": "error", "message": str(exc)}
+        if create_result["status"] == "error":
+            return {"status": "error", "message": "Failed to create recipe from image"}
 
-        return {"status": "success", "analysis": analysis}
+        return {
+            "status": "success",
+            "recipe_id": create_result["recipe_id"],
+            "title": create_result["title"],
+            "message": "Recipe successfully created from image",
+        }

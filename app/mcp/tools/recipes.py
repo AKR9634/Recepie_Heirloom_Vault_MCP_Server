@@ -39,6 +39,55 @@ def _recipe_embedding_text(title: str, recipe_text: str) -> str:
     return f"{title}\n\n{recipe_text}"
 
 
+async def create_recipe_with_embedding(
+    title: str,
+    recipe_text: str,
+    region: str | None = None,
+    occasion: str | None = None,
+    *,
+    fail_on_embedding_error: bool = False,
+    success_message: str = "Recipe created successfully",
+) -> dict:
+    validation_error = _validate_recipe_input(title, recipe_text)
+    if validation_error:
+        return {"status": "error", "message": validation_error}
+
+    try:
+        recipe = await recipe_db.create_recipe(
+            title=title.strip(),
+            recipe_text=recipe_text.strip(),
+            region=region,
+            occasion=occasion,
+        )
+    except Exception as exc:
+        return {"status": "error", "message": f"Failed to create recipe: {exc}"}
+
+    recipe_id = str(recipe["id"])
+    embedding_text = _recipe_embedding_text(recipe["title"], recipe["recipe_text"])
+
+    try:
+        embedding = await generate_embedding(embedding_text)
+        await embedding_db.store_embedding(recipe_id, embedding)
+    except Exception as exc:
+        if fail_on_embedding_error:
+            return {"status": "error", "message": f"Failed to create recipe: {exc}"}
+        return {
+            "status": "success",
+            "recipe_id": recipe_id,
+            "title": recipe["title"],
+            "message": success_message,
+            "embedding_status": "failed",
+            "embedding_error": str(exc),
+        }
+
+    return {
+        "status": "success",
+        "recipe_id": recipe_id,
+        "title": recipe["title"],
+        "message": success_message,
+    }
+
+
 def register_tools(mcp: FastMCP) -> None:
     @mcp.tool
     async def add_recipe(
@@ -48,40 +97,12 @@ def register_tools(mcp: FastMCP) -> None:
         occasion: str | None = None,
     ) -> dict:
         """Add a family recipe to the heirloom vault."""
-        validation_error = _validate_recipe_input(title, recipe_text)
-        if validation_error:
-            return {"status": "error", "message": validation_error}
-
-        try:
-            recipe = await recipe_db.create_recipe(
-                title=title.strip(),
-                recipe_text=recipe_text.strip(),
-                region=region,
-                occasion=occasion,
-            )
-        except Exception as exc:
-            return {"status": "error", "message": f"Failed to create recipe: {exc}"}
-
-        recipe_id = str(recipe["id"])
-        embedding_text = _recipe_embedding_text(recipe["title"], recipe["recipe_text"])
-
-        try:
-            embedding = await generate_embedding(embedding_text)
-            await embedding_db.store_embedding(recipe_id, embedding)
-        except Exception as exc:
-            return {
-                "status": "success",
-                "recipe_id": recipe_id,
-                "message": "Recipe created successfully",
-                "embedding_status": "failed",
-                "embedding_error": str(exc),
-            }
-
-        return {
-            "status": "success",
-            "recipe_id": recipe_id,
-            "message": "Recipe created successfully",
-        }
+        return await create_recipe_with_embedding(
+            title=title,
+            recipe_text=recipe_text,
+            region=region,
+            occasion=occasion,
+        )
 
     @mcp.tool
     async def get_recipe(recipe_id: str) -> dict:

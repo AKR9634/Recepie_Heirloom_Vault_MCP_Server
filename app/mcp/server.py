@@ -8,7 +8,9 @@ from app.database.connection import close_pool, init_pool
 from app.database.schema import apply_schema
 from app.embeddings import warmup_embeddings
 from app.mcp.tools import food_image as food_image_tools
+from app.mcp.tools import recipe_story as recipe_story_tools
 from app.mcp.tools import recipes as recipe_tools
+from app.story import warmup_story_model
 
 settings = get_settings()
 
@@ -21,6 +23,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[None]:
     await apply_schema(settings.database_url)
     await init_pool(settings.database_url)
     await warmup_embeddings()
+    await warmup_story_model()
     try:
         yield
     finally:
@@ -31,3 +34,4 @@ mcp = FastMCP(settings.mcp_server_name, lifespan=lifespan)
 
 recipe_tools.register_tools(mcp)
 food_image_tools.register_tools(mcp)
+recipe_story_tools.register_tools(mcp)

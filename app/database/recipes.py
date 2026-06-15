@@ -86,6 +86,44 @@ async def search_recipes(query: str, limit: int = 20) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+async def get_recipe_story(recipe_id: str) -> str | None:
+    pool = get_pool()
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT story
+            FROM recipes
+            WHERE id = $1
+            """,
+            recipe_id,
+        )
+
+    if row is None:
+        return None
+
+    story = row["story"]
+    if story is None or not str(story).strip():
+        return None
+
+    return str(story)
+
+
+async def save_recipe_story(recipe_id: str, story: str) -> None:
+    pool = get_pool()
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE recipes
+            SET story = $2
+            WHERE id = $1
+            """,
+            recipe_id,
+            story,
+        )
+
+
 async def delete_recipe(recipe_id: str) -> dict | None:
     pool = get_pool()
 
