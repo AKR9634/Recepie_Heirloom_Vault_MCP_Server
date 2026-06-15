@@ -7,6 +7,7 @@ from app.config.settings import get_settings
 from app.database.connection import close_pool, init_pool
 from app.database.schema import apply_schema
 from app.embeddings import warmup_embeddings
+from app.mcp.tools import food_image as food_image_tools
 from app.mcp.tools import recipes as recipe_tools
 
 settings = get_settings()
@@ -29,3 +30,4 @@ async def lifespan(server: FastMCP) -> AsyncIterator[None]:
 mcp = FastMCP(settings.mcp_server_name, lifespan=lifespan)
 
 recipe_tools.register_tools(mcp)
+food_image_tools.register_tools(mcp)

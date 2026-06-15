@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     mcp_server_name: str = "Recipe Heirloom Vault"
     huggingface_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     huggingfacehub_api_token: str = ""
+    openrouter_api_key: str = ""
+    food_analysis_model: str = "qwen/qwen2.5-vl-72b-instruct"
 
 
 @lru_cache
