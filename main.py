@@ -8,11 +8,13 @@ from app.mcp.server import mcp
 async def startup() -> None:
     settings = get_settings()
 
-    print("DATABASE_URL =", settings.database_url)
-    print("MCP_SERVER_NAME =", settings.mcp_server_name)
-    print("HUGGINGFACE_EMBEDDING_MODEL =", settings.huggingface_embedding_model)
-    print("HUGGINGFACEHUB_API_TOKEN =", settings.huggingfacehub_api_token)
+    # print("DATABASE_URL =", settings.database_url)
+    # print("MCP_SERVER_NAME =", settings.mcp_server_name)
+    # print("HUGGINGFACE_EMBEDDING_MODEL =", settings.huggingface_embedding_model)
+    # print("HUGGINGFACEHUB_API_TOKEN =", settings.huggingfacehub_api_token)
 
+    print("Starting Recipe Heirloom Vault MCP Server...")
+    
     await init_pool(settings.database_url)
 
 

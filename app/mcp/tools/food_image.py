@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import httpx
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -66,6 +67,22 @@ def image_to_data_url(image_path: str) -> str:
 
     encoded = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime_type};base64,{encoded}"
+
+
+async def image_url_to_data_url(image_url: str) -> str:
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.get(image_url)
+
+    response.raise_for_status()
+
+    content_type = response.headers.get(
+        "content-type",
+        "image/jpeg",
+    )
+
+    encoded = base64.b64encode(response.content).decode("ascii")
+
+    return f"data:{content_type};base64,{encoded}"
 
 
 def _create_openrouter_client() -> OpenAI:
@@ -224,17 +241,36 @@ def analysis_to_recipe_text(analysis: dict) -> str:
     return "\n".join(lines)
 
 
-async def run_food_image_analysis(image_path: str) -> dict:
-    if not image_path or not image_path.strip():
-        return {"status": "error", "message": "Image path cannot be empty"}
+async def run_food_image_analysis(image_path: str | None = None, image_url: str | None = None,) -> dict:
+    
+    if image_url:
+        try:
+            data_url = await image_url_to_data_url(image_url.strip())
+        except Exception as exc:
+            return {
+                "status": "error",
+                "message": f"Unable to download image: {exc}",
+            }
 
-    try:
-        data_url = image_to_data_url(image_path.strip())
-    except FileNotFoundError:
-        return {"status": "error", "message": "Unable to analyze image: file not found"}
-    except (OSError, ValueError) as exc:
-        return {"status": "error", "message": f"Unable to analyze image: {exc}"}
+    elif image_path:
+        try:
+            data_url = image_to_data_url(image_path.strip())
+        except FileNotFoundError:
+            return {
+                "status": "error",
+                "message": "Unable to analyze image: file not found",
+            }
+        except (OSError, ValueError) as exc:
+            return {
+                "status": "error",
+                "message": f"Unable to analyze image: {exc}",
+            }
 
+    else:
+        return {
+            "status": "error",
+            "message": "Provide image_path or image_url",
+        }
     try:
         response_text = await call_food_analysis_model(data_url)
     except ValueError as exc:
@@ -254,14 +290,14 @@ async def run_food_image_analysis(image_path: str) -> dict:
 
 def register_tools(mcp: FastMCP) -> None:
     @mcp.tool
-    async def analyze_food_image(image_path: str) -> dict:
+    async def analyze_food_image(image_path: str | None = None, image_url: str | None = None) -> dict:
         """Identify a prepared dish from a food image and estimate how it is commonly made."""
-        return await run_food_image_analysis(image_path)
-
+        return await run_food_image_analysis(image_path=image_path, image_url=image_url)
+    
     @mcp.tool
-    async def save_analyzed_recipe(image_path: str) -> dict:
+    async def save_analyzed_recipe(image_path: str | None = None, image_url: str | None = None) -> dict:
         """Analyze a food image and save the estimated recipe to the heirloom vault."""
-        analysis_result = await run_food_image_analysis(image_path)
+        analysis_result = await run_food_image_analysis(image_path=image_path, image_url=image_url)
         if analysis_result["status"] == "error":
             return analysis_result
 
