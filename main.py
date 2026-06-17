@@ -22,7 +22,7 @@ def main() -> None:
     asyncio.run(startup())
 
     try:
-        mcp.run()
+        mcp.run(transport="http", host="0.0.0.0", port=8000)
     finally:
         asyncio.run(close_pool())
 
